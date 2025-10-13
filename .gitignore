@@ -1,3 +1,4 @@
 .specstory
 .cursorindexingignore
 .DS_Store
+__pycache__/
