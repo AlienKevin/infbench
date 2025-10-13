@@ -166,7 +166,7 @@ def main():
     parser.add_argument("--port", type=int, default=8000, help="Server port")
 
     # Benchmark arguments
-    parser.add_argument("--num_prompts", type=int, default=256, help="Number of prompts to benchmark")
+    parser.add_argument("--num_prompts", type=int, default=1000, help="Number of prompts to benchmark")
     parser.add_argument("--request_rate", type=float, default=float("inf"), help="Request rate (requests/sec)")
     parser.add_argument("--dataset_name", type=str, default="random", help="Dataset name")
     parser.add_argument("--dataset_path", type=str, default=None, help="Dataset path")
