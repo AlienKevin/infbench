@@ -14,11 +14,6 @@ from levanter.models.llama import LlamaConfig
 from levanter.trainer import TrainerConfig
 from transformers import AutoConfig
 
-parser.add_argument("--max_seq_len", type=int, default=2048, help="Maximum sequence length")
-parser.add_argument("--max_seqs", type=int, default=256, help="Maximum concurrent sequences")
-parser.add_argument("--page_size", type=int, default=128, help="Page size for KV cache")
-parser.add_argument("--max_pages", type=int, default=None, help="Maximum number of pages")
-
 
 def load_model(config):
     """Load a model from HuggingFace checkpoint or local path."""
@@ -99,15 +94,22 @@ def start_server(config):
     server.serve()
 
 
-# Trainer configuration
-trainer: TrainerConfig = field(
-    default_factory=lambda: TrainerConfig(
-        model_axis_size=4,
-        tensor_parallel_axes=["mlp", "heads", "kv_head", "vocab"],
-        mp=jmp.get_policy("p=f32,c=bfloat16"),
-    )
-)
+if __name__ == '__main__':
+    parser.add_argument("--max_seq_len", type=int, default=2048, help="Maximum sequence length")
+    parser.add_argument("--max_seqs", type=int, default=256, help="Maximum concurrent sequences")
+    parser.add_argument("--page_size", type=int, default=128, help="Page size for KV cache")
+    parser.add_argument("--max_pages", type=int, default=None, help="Maximum number of pages")
 
-self.model_config = LlamaConfig.from_hf_config(
-            AutoConfig.from_pretrained(self.model_path)
+
+    # Trainer configuration
+    trainer: TrainerConfig = field(
+        default_factory=lambda: TrainerConfig(
+            model_axis_size=4,
+            tensor_parallel_axes=["mlp", "heads", "kv_head", "vocab"],
+            mp=jmp.get_policy("p=f32,c=bfloat16"),
+        )
+    )
+
+    self.model_config = LlamaConfig.from_hf_config(
+                AutoConfig.from_pretrained(self.model_path)
         )
