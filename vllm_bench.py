@@ -18,27 +18,6 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import equinox as eqx
-import haliax as hax
-import jax.random as jrandom
-import jmp
-from haliax import Axis
-from haliax.partitioning import round_axis_for_partitioning
-
-# Add bench directory to path for lib imports
-sys.path.insert(0, str(Path(__file__).parent))
-
-# Add levanter to the path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / "submodules" / "levanter" / "src"))
-
-from levanter.checkpoint import load_checkpoint
-from levanter.compat.hf_checkpoints import HFCheckpointConverter, load_tokenizer
-from levanter.inference.engine import InferenceEngineConfig
-from levanter.inference.openai import InferenceServer, InferenceServerConfig
-from levanter.models.lm_model import LmConfig
-from levanter.models.llama import LlamaConfig
-from levanter.trainer import TrainerConfig
-from transformers import AutoConfig
 
 logger = logging.getLogger(__name__)
 
@@ -53,10 +32,6 @@ class BenchmarkConfig:
     # Server configuration
     host: str
     port: int
-    max_seq_len: int
-    max_seqs: int
-    page_size: int
-    max_pages: int
 
     # Benchmark configuration
     num_prompts: int
@@ -66,105 +41,7 @@ class BenchmarkConfig:
     num_fewshot: int
 
     tokenizer_path: str | None = None
-    model_config: LmConfig = None
     dataset_path: str | None = None
-    
-    # Trainer configuration
-    trainer: TrainerConfig = field(
-        default_factory=lambda: TrainerConfig(
-            model_axis_size=4,
-            tensor_parallel_axes=["mlp", "heads", "kv_head", "vocab"],
-            mp=jmp.get_policy("p=f32,c=bfloat16"),
-        )
-    )
-
-    # Additional flags
-    force_run_failed: bool = False
-
-    def __post_init__(self):
-        if self.model_config is None:
-            self.model_config = LlamaConfig.from_hf_config(
-                AutoConfig.from_pretrained(self.model_path)
-            )
-
-
-def load_model(config: BenchmarkConfig):
-    """Load a model from HuggingFace checkpoint or local path."""
-    tokenizer_path = config.tokenizer_path or config.model_path
-    tokenizer = load_tokenizer(tokenizer_path)
-    vocab_size = len(tokenizer)
-
-    mp = config.trainer.mp
-    key = jrandom.PRNGKey(config.seed)
-
-    with config.trainer.use_device_mesh(), hax.axis_mapping(config.trainer.compute_axis_mapping):
-        Vocab = round_axis_for_partitioning(Axis("vocab", vocab_size), config.trainer.compute_axis_mapping)
-
-        # Try loading as HF checkpoint first
-        logger.info(f"Loading model from {config.model_path}")
-        logger.info(f"Model type: {config.model_config.model_type}")
-        logger.info(f"Vocab size: {vocab_size}")
-        logger.info(f"Compute dtype: {mp.compute_dtype}")
-
-        try:
-            # Check if it's a local Levanter checkpoint
-            checkpoint_path = Path(config.model_path)
-            if checkpoint_path.exists() and (checkpoint_path / "model").exists():
-                logger.info("Loading from Levanter checkpoint")
-                model = eqx.filter_eval_shape(config.model_config.build, Vocab, key=key)
-                model = load_checkpoint(model, config.model_path, subpath="model")
-                model = mp.cast_to_compute(model)
-                return model, tokenizer
-        except Exception as e:
-            logger.debug(f"Not a Levanter checkpoint: {e}")
-
-        # Load from HuggingFace
-        logger.info(f"Loading from HuggingFace checkpoint: {config.model_path}")
-        converter = HFCheckpointConverter(
-            type(config.model_config),
-            reference_checkpoint=config.model_path,
-            tokenizer=tokenizer,
-        )
-
-        model = converter.load_pretrained(
-            config.model_config.model_type,
-            ref=config.model_path,
-            dtype=mp.compute_dtype,
-            axis_mapping=config.trainer.parameter_axis_mapping,
-        )
-
-        return model, tokenizer
-
-
-def start_server_process(config: BenchmarkConfig):
-    """Start the Levanter inference server in a separate process."""
-    logger.info("Starting Levanter inference server...")
-
-    # Load model and create server within the device mesh and axis mapping context
-    model, tokenizer = load_model(config)
-
-    server_config = InferenceServerConfig(
-        service=InferenceEngineConfig(
-            max_seq_len=config.max_seq_len,
-            max_seqs=config.max_seqs,
-            page_size=config.page_size,
-            max_pages=config.max_pages,
-        ),
-        host=config.host,
-        port=config.port,
-        temperature=0.7,
-        seed=config.seed,
-        trainer=config.trainer,
-    )
-
-    # Create server within the device mesh and axis mapping context
-    with config.trainer.use_device_mesh(), hax.axis_mapping(config.trainer.compute_axis_mapping):
-        server = InferenceServer.create(server_config, model, tokenizer)
-
-    logger.info(f"Server initialized, listening on {config.host}:{config.port}")
-
-    # Start serving (blocking call)
-    server.serve()
 
 
 async def wait_for_server(host: str, port: int, timeout: int = 60):
@@ -265,26 +142,11 @@ async def run_benchmark_client(config: BenchmarkConfig):
 
 async def main_async(config: BenchmarkConfig):
     """Main async entry point."""
-    # Start the server in a separate process
-    server_process = multiprocessing.Process(target=start_server_process, args=(config,))
-    server_process.start()
+    # Wait for server to be ready
+    await wait_for_server(config.host, config.port)
 
-    try:
-        # Wait for server to be ready
-        await wait_for_server(config.host, config.port)
-
-        # Run the benchmark
-        await run_benchmark_client(config)
-
-    finally:
-        # Cleanup
-        logger.info("Shutting down server...")
-        server_process.terminate()
-        server_process.join(timeout=10)
-        if server_process.is_alive():
-            logger.warning("Server did not terminate gracefully, killing...")
-            server_process.kill()
-            server_process.join()
+    # Run the benchmark
+    await run_benchmark_client(config)
 
 
 def main():
@@ -298,10 +160,6 @@ def main():
     # Server arguments
     parser.add_argument("--host", type=str, default="127.0.0.1", help="Server host")
     parser.add_argument("--port", type=int, default=8000, help="Server port")
-    parser.add_argument("--max_seq_len", type=int, default=2048, help="Maximum sequence length")
-    parser.add_argument("--max_seqs", type=int, default=256, help="Maximum concurrent sequences")
-    parser.add_argument("--page_size", type=int, default=128, help="Page size for KV cache")
-    parser.add_argument("--max_pages", type=int, default=None, help="Maximum number of pages")
 
     # Benchmark arguments
     parser.add_argument("--num_prompts", type=int, default=256, help="Number of prompts to benchmark")
@@ -310,9 +168,6 @@ def main():
     parser.add_argument("--dataset_path", type=str, default=None, help="Dataset path")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--num_fewshot", type=int, default=0, help="Number of few-shot examples")
-
-    # Additional flags
-    parser.add_argument("--force_run_failed", type=bool, default=False, help="Force run even if previous run failed")
 
     args = parser.parse_args()
 
@@ -332,7 +187,6 @@ def main():
         dataset_path=args.dataset_path,
         seed=args.seed,
         num_fewshot=args.num_fewshot,
-        force_run_failed=args.force_run_failed,
     )
 
     # Setup logging
