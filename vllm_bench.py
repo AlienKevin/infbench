@@ -17,6 +17,7 @@ import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
+from transformers import AutoTokenizer
 
 
 logger = logging.getLogger(__name__)
@@ -80,7 +81,10 @@ async def run_benchmark_client(config: BenchmarkConfig):
     base_url = f"http://{config.host}:{config.port}"
 
     # Load tokenizer for the benchmark
-    tokenizer = load_tokenizer(config.tokenizer_path or config.model_path)
+    tokenizer = AutoTokenizer.from_pretrained(
+        config.tokenizer_path or config.model_path,
+        trust_remote_code=True,
+    )
 
     # Create sample requests
     from datasets import get_samples
@@ -177,10 +181,6 @@ def main():
         tokenizer_path=args.tokenizer_path,
         host=args.host,
         port=args.port,
-        max_seq_len=args.max_seq_len,
-        max_seqs=args.max_seqs,
-        page_size=args.page_size,
-        max_pages=args.max_pages,
         num_prompts=args.num_prompts,
         request_rate=args.request_rate,
         dataset_name=args.dataset_name,
