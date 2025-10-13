@@ -1,9 +1,12 @@
+import argparse
 import equinox as eqx
 import haliax as hax
 import jax.random as jrandom
 import jmp
 from haliax import Axis
 from haliax.partitioning import round_axis_for_partitioning
+from types import SimpleNamespace
+import logging as logger
 
 from levanter.checkpoint import load_checkpoint
 from levanter.compat.hf_checkpoints import HFCheckpointConverter, load_tokenizer
@@ -95,21 +98,34 @@ def start_server(config):
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description="Levanter inference server")
+
+    parser.add_argument("--model_path", type=str, default="meta-llama/Llama-3.1-8B", help="Model path or HF repo")
+    parser.add_argument("--tokenizer_path", type=str, default=None, help="Tokenizer path (defaults to model_path)")
+
     parser.add_argument("--max_seq_len", type=int, default=2048, help="Maximum sequence length")
     parser.add_argument("--max_seqs", type=int, default=256, help="Maximum concurrent sequences")
     parser.add_argument("--page_size", type=int, default=128, help="Page size for KV cache")
     parser.add_argument("--max_pages", type=int, default=None, help="Maximum number of pages")
 
+    parser.add_argument("--host", type=str, default="127.0.0.1", help="Server host")
+    parser.add_argument("--port", type=int, default=8000, help="Server port")
+    parser.add_argument("--seed", type=int, default=42, help="Random seed")
+
+    args = parser.parse_args()
+    config = vars(args)
 
     # Trainer configuration
-    trainer: TrainerConfig = field(
-        default_factory=lambda: TrainerConfig(
-            model_axis_size=4,
-            tensor_parallel_axes=["mlp", "heads", "kv_head", "vocab"],
-            mp=jmp.get_policy("p=f32,c=bfloat16"),
-        )
+    config["trainer"] = TrainerConfig(
+        model_axis_size=4,
+        tensor_parallel_axes=["mlp", "heads", "kv_head", "vocab"],
+        mp=jmp.get_policy("p=f32,c=bfloat16"),
     )
 
-    self.model_config = LlamaConfig.from_hf_config(
-                AutoConfig.from_pretrained(self.model_path)
-        )
+    config["model_config"] = LlamaConfig.from_hf_config(
+        AutoConfig.from_pretrained(config["model_path"])
+    )
+
+    config = SimpleNamespace(**config)
+
+    start_server(config)
