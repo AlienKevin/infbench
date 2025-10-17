@@ -1,0 +1,3 @@
+[submodule "submodules/EasyDeL"]
+	path = submodules/EasyDeL
+	url = git@github.com:AlienKevin/EasyDeL.git

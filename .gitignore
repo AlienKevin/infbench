@@ -2,3 +2,4 @@
 .cursorindexingignore
 .DS_Store
 __pycache__/
+cache_dir/
