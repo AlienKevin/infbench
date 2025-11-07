@@ -10,7 +10,7 @@ JAX_COMPILATION_CACHE_DIR=/tmp/jit_cache uv run python -u -m sgl_jax.launch_serv
     --device=tpu \
     --random-seed=3 \
     --node-rank=0 \
-    --mem-fraction-static=0.8 \
+    --mem-fraction-static=0.9 \
     --dtype=bfloat16
 
 # JAX_COMPILATION_CACHE_DIR=/tmp/jit_cache uv run python -m sgl_jax.bench_offline_throughput \
