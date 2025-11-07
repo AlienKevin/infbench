@@ -2,9 +2,29 @@
 
 ## vLLM
 
+Start vLLM docker
 ```bash
-bash servers/vllm_server.sh &> out.txt
+sudo docker run \
+      --pull=always \
+      -v $SSH_AUTH_SOCK:/ssh-agent \
+      -e SSH_AUTH_SOCK=/ssh-agent \
+      -v ~/.cache/huggingface:/root/.cache/huggingface \
+      --privileged \
+      -itd \
+      --net host \
+      --shm-size=16G \
+      --hostname vllm-tpu \
+      --name vllm-tpu-container \
+      --env HUGGING_FACE_HUB_TOKEN=xxx \
+      vllm/vllm-tpu:v0.11.1
 ```
+
+If container is already running, you can exec into it:
+```bash
+sudo docker exec -it vllm-tpu-container bash
+```
+
+Paste content of `servers/vllm_server.sh` into the container and run.
 
 ## Levanter
 
@@ -25,7 +45,7 @@ python servers/easydel_server.py &> out.txt
 To work around EasyDeL changing `model_path` internally:
 
 ```bash
-python vllm_bench.py --model_path llama-8.03b --tokenizer_path meta-llama/Llama-3.1-8B
+python vllm_bench.py --model_path meta-llama/Llama-3.1-8B --tokenizer_path meta-llama/Llama-3.1-8B
 ```
 
 ## EasyDeL

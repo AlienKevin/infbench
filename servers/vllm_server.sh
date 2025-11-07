@@ -1,12 +1,6 @@
-vllm bench serve \
+vllm serve \
     --model meta-llama/Llama-3.1-8B \
-    --dataset-name random \
-    --seed 42
-    --ignore-eos \
-    --num-prompts 256 \
+    --seed 42 \
     --tokenizer meta-llama/Llama-3.1-8B \
     --max-model-len 2048 \
-    --random-input-len 1024 \
-    --random-output-len 1024 \
-    --endpoint /v1/completions \
-    --base-url http://localhost:8000
+    --tensor-parallel-size 4
