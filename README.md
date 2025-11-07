@@ -53,3 +53,31 @@ python vllm_bench.py --model_path meta-llama/Llama-3.1-8B --tokenizer_path meta-
 ```bash
 python vllm_bench.py --model_path llama-8.03b --tokenizer_path meta-llama/Llama-3.1-8B
 ```
+
+# Benchmark results
+
+## vLLM
+
+On v4-8:
+```
+============ Serving Benchmark Result ============
+Successful requests:                     1000      
+Benchmark duration (s):                  308.06    
+Total input tokens:                      1023000   
+Total generated tokens:                  1024000   
+Request throughput (req/s):              3.25      
+Output token throughput (tok/s):         3324.05   
+Peak output token throughput (tok/s):    84.00     
+Peak concurrent requests:                1000.00   
+Total Token throughput (tok/s):          6644.86   
+----------------End-to-end Latency----------------
+Mean E2EL (ms):                          194384.25 
+Median E2EL (ms):                        168641.90 
+P25 E2EL (ms):                           90387.84  
+P50 E2EL (ms):                           168641.90 
+P75 E2EL (ms):                           246410.87 
+P90 E2EL (ms):                           306384.01 
+P95 E2EL (ms):                           307139.50 
+P99 E2EL (ms):                           307487.23 
+==================================================
+```
